@@ -1,0 +1,185 @@
+services:
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /srv/homelab/nginx/conf.d:/etc/nginx/conf.d
+      #- /srv/homelab/nginx/certs:/etc/nginx/certs
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      jellyfin:
+        condition: service_healthy
+    networks:
+      - homelab
+
+  gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
+      - SERVER_COUNTRIES=Germany
+      - FIREWALL_OUTBOUND_SUBNETS=192.168.88.0/24
+      - FIREWALL_INPUT_PORTS=8080,8081
+    ports:
+      - 8080:8080   # qbittorrent
+      - 9696:9696   # prowlarr
+      - 7878:7878   # radarr
+      - 8989:8989   # sonarr
+      #- 8787:8787   # bookshelf
+    restart: unless-stopped
+
+  jellyfin:
+    image: jellyfin/jellyfin
+    container_name: jellyfin
+    restart: unless-stopped
+    volumes:
+      - /srv/data/configs/jellyfin:/config
+      - /srv/data/configs/jellyfin/cache:/cache
+      - /srv/data/media:/media
+    ports:
+      - "8096:8096"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8096"]
+      interval: 30s
+      retries: 3
+    networks:
+      - homelab
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    network_mode: "service:gluetun"
+    restart: unless-stopped
+    depends_on:
+      - gluetun
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Warsaw
+      - WEBUI_PORT=8080
+      #- WEBUI_USERNAME=admin
+      #- WEBUI_PASSWORD=adminadmin
+    volumes:
+      - /srv/data/configs/qbittorrent:/config
+      - /srv/data/downloads:/downloads
+
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    environment:
+      - LOG_LEVEL=info
+      - TZ=Europe/Warsaw
+    ports:
+      - 5055:5055
+    volumes:
+      #- ./config/jellyseerr:/app/config
+      - /srv/data/configs/jellyseerr:/app/config
+    restart: unless-stopped
+
+  #bookshelf:
+  #  image: ghcr.io/pennydreadful/bookshelf:hardcover
+  #  container_name: bookshelf
+  #  restart: unless-stopped
+  #  network_mode: "service:gluetun"
+  #  depends_on:
+  #    - gluetun
+  #  volumes:
+  #    - /srv/data/configs/bookshelf:/config
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr
+    container_name: sonarr
+    network_mode: "service:gluetun"
+    restart: unless-stopped
+    depends_on:
+      - gluetun
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /srv/data/configs/sonarr:/config
+      - /srv/data/media:/media
+      - /srv/data/downloads:/downloads
+
+  radarr:
+    image: lscr.io/linuxserver/radarr
+    container_name: radarr
+    network_mode: "service:gluetun"
+    restart: unless-stopped
+    depends_on:
+      - gluetun
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /srv/data/configs/radarr:/config
+      - /srv/data/media:/media
+      - /srv/data/downloads:/downloads
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr
+    container_name: prowlarr
+    network_mode: "service:gluetun"
+    restart: unless-stopped
+    depends_on:
+      - gluetun
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /srv/data/configs/prowlarr:/config
+
+  uptime-kuma:
+    image: louislam/uptime-kuma
+    container_name: uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - /srv/data/configs/uptime-kuma:/app/data
+    networks:
+      - homelab
+
+  glances:
+    image: nicolargo/glances:latest-full
+    container_name: glances
+    restart: unless-stopped
+    pid: host
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/host:ro
+      - /sys:/sys:ro
+    environment:
+      - GLANCES_OPT=-w
+
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Warsaw
+      WEBPASSWORD: ${PIHOLE_PASSWORD}
+      DNSMASQ_LISTENING: all
+    volumes:
+      - /srv/data/configs/pihole:/etc/pihole
+      - /srv/data/configs/pihole-dnsmasq:/etc/dnsmasq.d
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8081:80"
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    driver: bridge

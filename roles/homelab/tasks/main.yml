@@ -1,0 +1,26 @@
+- name: Create base directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /srv/homelab
+    - /srv/data/configs
+    - /srv/data/media
+    - /srv/data/downloads
+
+- name: Copy docker-compose
+  template:
+    src: docker-compose.yml.j2
+    dest: /srv/homelab/docker-compose.yml
+
+- name: Copy env file
+  template:
+    src: .env.j2
+    dest: /srv/homelab/.env
+    mode: "0600"
+
+- name: Start containers
+  command: docker compose up -d
+  args:
+    chdir: /srv/homelab
