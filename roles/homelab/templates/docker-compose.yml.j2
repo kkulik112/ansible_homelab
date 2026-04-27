@@ -36,7 +36,6 @@ services:
       - 9696:9696   # prowlarr
       - 7878:7878   # radarr
       - 8989:8989   # sonarr
-      #- 8787:8787   # bookshelf
     restart: unless-stopped
 
   jellyfin:
@@ -68,8 +67,6 @@ services:
       - PGID=1000
       - TZ=Europe/Warsaw
       - WEBUI_PORT=8080
-      #- WEBUI_USERNAME=admin
-      #- WEBUI_PASSWORD=adminadmin
     volumes:
       - /srv/data/configs/qbittorrent:/config
       - /srv/data/downloads:/downloads
@@ -86,16 +83,6 @@ services:
       #- ./config/jellyseerr:/app/config
       - /srv/data/configs/jellyseerr:/app/config
     restart: unless-stopped
-
-  #bookshelf:
-  #  image: ghcr.io/pennydreadful/bookshelf:hardcover
-  #  container_name: bookshelf
-  #  restart: unless-stopped
-  #  network_mode: "service:gluetun"
-  #  depends_on:
-  #    - gluetun
-  #  volumes:
-  #    - /srv/data/configs/bookshelf:/config
 
   sonarr:
     image: lscr.io/linuxserver/sonarr
